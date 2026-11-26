@@ -55,12 +55,12 @@ resource "aws_secretsmanager_secret_version" "database" {
 }
 
 module "database" {
-  source                = "./modules/database"
-  name                  = "${local.name}-db"
-  environment           = var.environment
-  vpc_id                = module.network.vpc_id
-  private_subnet_ids    = module.network.private_subnet_ids
-  database_password    = random_password.database.result
+  source                    = "./modules/database"
+  name                      = "${local.name}-db"
+  environment               = var.environment
+  vpc_id                    = module.network.vpc_id
+  private_subnet_ids        = module.network.private_subnet_ids
+  database_password         = random_password.database.result
   allowed_security_group_id = module.cluster.cluster_security_group_id
 }
 

@@ -25,28 +25,28 @@ resource "aws_security_group" "database" {
 }
 
 resource "aws_db_instance" "this" {
-  identifier                  = var.name
-  engine                      = "postgres"
-  engine_version              = "16.4"
-  instance_class              = "db.t4g.micro"
-  allocated_storage           = 20
-  max_allocated_storage       = 100
-  storage_type                = "gp3"
-  storage_encrypted           = true
-  db_name                     = "retail"
-  username                    = "retailadmin"
-  password                    = var.database_password
-  port                        = 5432
-  db_subnet_group_name        = aws_db_subnet_group.this.name
-  vpc_security_group_ids      = [aws_security_group.database.id]
-  publicly_accessible         = false
-  multi_az                    = var.environment == "prod"
-  backup_retention_period     = var.environment == "prod" ? 7 : 1
-  deletion_protection         = var.environment == "prod"
-  skip_final_snapshot         = var.environment != "prod"
-  final_snapshot_identifier   = var.environment == "prod" ? "${var.name}-final" : null
-  auto_minor_version_upgrade  = true
-  apply_immediately           = var.environment != "prod"
+  identifier                      = var.name
+  engine                          = "postgres"
+  engine_version                  = "16.4"
+  instance_class                  = "db.t4g.micro"
+  allocated_storage               = 20
+  max_allocated_storage           = 100
+  storage_type                    = "gp3"
+  storage_encrypted               = true
+  db_name                         = "retail"
+  username                        = "retailadmin"
+  password                        = var.database_password
+  port                            = 5432
+  db_subnet_group_name            = aws_db_subnet_group.this.name
+  vpc_security_group_ids          = [aws_security_group.database.id]
+  publicly_accessible             = false
+  multi_az                        = var.environment == "prod"
+  backup_retention_period         = var.environment == "prod" ? 7 : 1
+  deletion_protection             = var.environment == "prod"
+  skip_final_snapshot             = var.environment != "prod"
+  final_snapshot_identifier       = var.environment == "prod" ? "${var.name}-final" : null
+  auto_minor_version_upgrade      = true
+  apply_immediately               = var.environment != "prod"
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  tags                        = { Name = var.name }
+  tags                            = { Name = var.name }
 }

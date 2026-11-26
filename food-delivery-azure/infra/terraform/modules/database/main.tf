@@ -3,8 +3,8 @@ resource "azurerm_postgresql_flexible_server" "this" {
   resource_group_name           = var.resource_group_name
   location                      = var.location
   version                       = "16"
-  delegated_subnet_id            = var.delegated_subnet_id
-  private_dns_zone_id            = var.private_dns_zone_id
+  delegated_subnet_id           = var.delegated_subnet_id
+  private_dns_zone_id           = var.private_dns_zone_id
   public_network_access_enabled = false
   administrator_login           = "foodadmin"
   administrator_password        = var.administrator_password

@@ -7,14 +7,14 @@ resource "azurerm_kubernetes_cluster" "this" {
   tags                = var.tags
 
   default_node_pool {
-    name                = "system"
-    vm_size             = "Standard_D2s_v5"
-    node_count          = 2
-    min_count           = 2
-    max_count           = 4
-    auto_scaling_enabled = true
-    vnet_subnet_id      = var.subnet_id
-    os_disk_size_gb     = 64
+    name                         = "system"
+    vm_size                      = "Standard_D2s_v5"
+    node_count                   = 2
+    min_count                    = 2
+    max_count                    = 4
+    auto_scaling_enabled         = true
+    vnet_subnet_id               = var.subnet_id
+    os_disk_size_gb              = 64
     only_critical_addons_enabled = true
   }
 

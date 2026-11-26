@@ -16,12 +16,12 @@ module "network" {
 }
 
 module "registry" {
-  source              = "./modules/registry"
-  name                = local.name
-  location            = var.location
-  resource_group_name = var.resource_group_name
+  source                = "./modules/registry"
+  name                  = local.name
+  location              = var.location
+  resource_group_name   = var.resource_group_name
   pipeline_principal_id = var.pipeline_principal_id
-  tags                = local.tags
+  tags                  = local.tags
 }
 
 module "database" {
@@ -36,12 +36,12 @@ module "database" {
 }
 
 module "cluster" {
-  source              = "./modules/cluster"
-  name                = local.name
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = module.network.aks_subnet_id
-  registry_id         = module.registry.id
+  source                = "./modules/cluster"
+  name                  = local.name
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  subnet_id             = module.network.aks_subnet_id
+  registry_id           = module.registry.id
   pipeline_principal_id = var.pipeline_principal_id
-  tags                = local.tags
+  tags                  = local.tags
 }

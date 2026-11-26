@@ -34,7 +34,7 @@ resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.this.id
   availability_zone = local.azs[count.index]
-  cidr_block        = "10.60.${count.index + 16}.0/20"
+  cidr_block        = "10.60.${count.index * 16 + 16}.0/20"
   tags = {
     Name                              = "${var.name}-private-${count.index + 1}"
     "kubernetes.io/role/internal-elb" = "1"

@@ -1,11 +1,21 @@
 const money = cents => new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
 const cart = new Map();
 const categories = ["All", "Accessories", "Home", "Clothing", "Stationery"];
+const nextStatuses = {
+  placed: ["processing", "cancelled"],
+  processing: ["shipped", "cancelled"],
+  shipped: ["delivered"],
+  delivered: [],
+  cancelled: [],
+};
+let adminToken = sessionStorage.getItem("retail-admin-token") || "";
 let products = [];
 let activeCategory = "All";
 
 async function api(url, options) {
-  const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+  const headers = { "Content-Type": "application/json", ...(options?.headers || {}) };
+  if (adminToken) headers["X-Admin-Token"] = adminToken;
+  const response = await fetch(url, { ...options, headers });
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "Something went wrong.");
   return body;
@@ -47,9 +57,9 @@ function renderCart() {
 function renderOrders(orders) {
   document.querySelector("#orders-list").innerHTML = orders.length ? orders.map(order => `
     <article class="order-card"><div><h3>Order #${order.id} · ${escapeHtml(order.customer_name)}</h3>
-      <p>${order.items.map(line => `${line.quantity} × ${escapeHtml(line.name)}`).join(", ")}</p>
-      <span class="status-pill">${order.status}</span></div><div class="order-total">${money(order.total_cents)}</div></article>`).join("") :
-    '<p class="muted">Your order list will appear here.</p>';
+      <p>${order.items.map(line => `${line.quantity} × ${escapeHtml(line.name)}`).join(", ")} · ${escapeHtml(order.shipping_address)} · ${escapeHtml(order.email)}</p>
+      <span class="status-pill">${order.status.replaceAll("_", " ")}</span></div><div class="order-total">${money(order.total_cents)}${nextStatuses[order.status].length ? `<div class="manage-controls"><select aria-label="Next status for order ${order.id}">${nextStatuses[order.status].map(status => `<option value="${status}">${status}</option>`).join("")}</select><button data-update="${order.id}">Update</button></div>` : ""}</div></article>`).join("") :
+    '<p class="muted">No merchant orders yet.</p>';
 }
 
 async function refreshOrders() {
@@ -60,7 +70,7 @@ async function refreshInventory() {
   const inventory = await api("/api/inventory");
   document.querySelector("#inventory-list").innerHTML = inventory.map(product => `
     <article class="inventory-row"><div class="inventory-name"><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.category)} · ${product.stock} units in stock</span></div>
-      <form class="stock-editor" data-stock="${product.id}"><input type="number" min="0" max="1000000" value="${product.stock}" required aria-label="New stock for ${escapeHtml(product.name)}"><button type="submit">Save stock</button></form></article>`).join("");
+      ${adminToken ? `<form class="stock-editor" data-stock="${product.id}"><input type="number" min="0" max="1000000" value="${product.stock}" required aria-label="New stock for ${escapeHtml(product.name)}"><button type="submit">Save stock</button></form>` : ""}</article>`).join("");
   products = inventory;
   renderProducts();
 }
@@ -69,6 +79,7 @@ document.addEventListener("click", async event => {
   const filter = event.target.closest("[data-category]");
   const addButton = event.target.closest("[data-add]");
   const quantityButton = event.target.closest("[data-quantity]");
+  const updateButton = event.target.closest("[data-update]");
   if (filter) {
     activeCategory = filter.dataset.category;
     renderFilters();
@@ -92,6 +103,21 @@ document.addEventListener("click", async event => {
       else if (line.quantity > line.product.stock) line.quantity = line.product.stock;
     }
     renderCart();
+  }
+  if (updateButton) {
+    const select = updateButton.parentElement.querySelector("select");
+    updateButton.disabled = true;
+    try {
+      await api(`/api/orders/${updateButton.dataset.update}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: select.value }),
+      });
+      await refreshOrders();
+    } catch (error) {
+      document.querySelector("#admin-message").textContent = error.message;
+    } finally {
+      updateButton.disabled = false;
+    }
   }
 });
 
@@ -140,7 +166,9 @@ document.querySelector("#checkout-form").addEventListener("submit", async event 
     event.currentTarget.reset();
     renderCart();
     message.textContent = `Order #${order.id} is confirmed.`;
-    await Promise.all([refreshOrders(), refreshInventory()]);
+    showTrackedOrder(order);
+    await refreshInventory();
+    document.querySelector("#orders").scrollIntoView({ behavior: "smooth" });
   } catch (error) {
     message.textContent = error.message;
   } finally {
@@ -148,8 +176,65 @@ document.querySelector("#checkout-form").addEventListener("submit", async event 
   }
 });
 
-document.querySelector("#refresh-orders").addEventListener("click", () => refreshOrders().catch(error => alert(error.message)));
+function showTrackedOrder(order) {
+  document.querySelector("#order-status").innerHTML = `<article class="order-card"><div><h3>Order #${order.id}</h3><p>${order.items.map(line => `${line.quantity} × ${escapeHtml(line.name)}`).join(", ")}</p><span class="status-pill">${order.status}</span></div><div class="order-total">${money(order.total_cents)}</div></article>`;
+}
 
-Promise.all([refreshInventory(), refreshOrders()])
-  .then(renderFilters)
-  .catch(error => { document.querySelector("#product-grid").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; });
+document.querySelector("#lookup-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const result = document.querySelector("#order-status");
+  result.textContent = "Looking up your order…";
+  try {
+    const order = await api("/api/orders/lookup", {
+      method: "POST",
+      body: JSON.stringify({ order_id: Number(form.get("order_id")), email: form.get("email") }),
+    });
+    showTrackedOrder(order);
+  } catch (error) {
+    result.textContent = error.message;
+  }
+});
+
+document.querySelector("#admin-login").addEventListener("click", async () => {
+  const input = document.querySelector("#admin-token");
+  const message = document.querySelector("#admin-message");
+  adminToken = input.value;
+  try {
+    await Promise.all([refreshOrders(), refreshInventory()]);
+    sessionStorage.setItem("retail-admin-token", adminToken);
+    input.value = "";
+    message.textContent = "Merchant desk unlocked for this browser session.";
+  } catch (error) {
+    adminToken = "";
+    sessionStorage.removeItem("retail-admin-token");
+    message.textContent = error.message;
+    await refreshInventory();
+  }
+});
+
+document.querySelector("#admin-logout").addEventListener("click", async () => {
+  adminToken = "";
+  sessionStorage.removeItem("retail-admin-token");
+  document.querySelector("#orders-list").innerHTML = '<p class="muted">Unlock the desk to view merchant orders.</p>';
+  document.querySelector("#admin-message").textContent = "Merchant desk locked.";
+  await refreshInventory();
+});
+
+document.querySelector("#refresh-orders").addEventListener("click", () => refreshOrders().catch(error => {
+  document.querySelector("#admin-message").textContent = error.message;
+}));
+
+refreshInventory().then(renderFilters).catch(error => {
+  document.querySelector("#product-grid").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`;
+});
+if (adminToken) {
+  Promise.all([refreshOrders(), refreshInventory()])
+    .then(() => { document.querySelector("#admin-message").textContent = "Merchant desk unlocked for this browser session."; })
+    .catch(error => {
+      adminToken = "";
+      sessionStorage.removeItem("retail-admin-token");
+      document.querySelector("#admin-message").textContent = error.message;
+      refreshInventory();
+    });
+}

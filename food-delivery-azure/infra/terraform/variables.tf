@@ -8,6 +8,11 @@ variable "resource_group_name" {
   type        = string
 }
 
+variable "pipeline_principal_id" {
+  description = "Object ID of the Azure DevOps service principal. It receives AKS cluster-admin and ACR push/build permissions."
+  type        = string
+}
+
 variable "project_name" {
   description = "3-15 character lowercase name prefix; the ACR name must be globally unique."
   type        = string

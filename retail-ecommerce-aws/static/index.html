@@ -29,8 +29,18 @@
       <div><p class="eyebrow">YOUR NEW FAVORITES</p><h2>Your bag<span>.</span></h2><div id="bag-lines" class="bag-lines"><p class="muted">Nothing in your bag just yet.</p></div></div>
       <form id="checkout-form" class="checkout-form"><h3>Shipping details</h3><label>Full name<input name="customer_name" maxlength="120" required placeholder="Your name"></label><label>Email address<input name="email" type="email" maxlength="254" required placeholder="you@example.com"></label><label>Shipping address<textarea name="shipping_address" maxlength="300" required placeholder="Street, city, postal code"></textarea></label><button class="button button-dark" type="submit">Place your order <span>→</span></button><p id="checkout-message" class="form-message" role="status"></p></form>
     </section>
-    <section class="orders-section" id="orders"><div class="section-title"><div><p class="eyebrow">WHERE IT’S GOING</p><h2>Recent orders<span>.</span></h2></div><button id="refresh-orders" class="text-button">Refresh ↻</button></div><div id="orders-list" class="orders-list"><p class="muted">Your order list will appear here.</p></div></section>
-    <section class="inventory-section" id="admin"><div class="section-title"><div><p class="eyebrow">STOCKROOM</p><h2>Inventory desk<span>.</span></h2></div><p>Keep the shelves in good shape.</p></div><div id="inventory-list" class="inventory-list"><p class="muted">Loading current stock…</p></div></section>
+    <section class="orders-section" id="orders"><div class="section-title"><div><p class="eyebrow">WHERE IT’S GOING</p><h2>Track an order<span>.</span></h2></div><p>Order number + checkout email</p></div>
+      <form id="lookup-form" class="lookup-form"><label>Order number<input name="order_id" type="number" min="1" required></label><label>Checkout email<input name="email" type="email" required></label><button class="button button-dark" type="submit">Find order <span>→</span></button></form>
+      <div id="order-status" class="orders-list" role="status"></div>
+    </section>
+    <section class="inventory-section" id="admin"><div class="section-title"><div><p class="eyebrow">STOCKROOM</p><h2>Merchant desk<span>.</span></h2></div><p>Keep orders and inventory moving.</p></div>
+      <div class="admin-access"><label>Merchant access token<input id="admin-token" type="password" autocomplete="current-password" placeholder="Enter your administrator token"></label><button id="admin-login" class="button button-dark" type="button">Unlock desk</button><button id="admin-logout" class="text-button" type="button">Lock</button></div>
+      <p id="admin-message" class="form-message" role="status">Order and inventory management require an administrator token.</p>
+      <div class="section-title admin-title"><div><p class="eyebrow">FULFILLMENT</p><h2>Orders<span>.</span></h2></div><button id="refresh-orders" class="text-button" type="button">Refresh orders ↻</button></div>
+      <div id="orders-list" class="orders-list"><p class="muted">Unlock the desk to view merchant orders.</p></div>
+      <div class="section-title admin-title"><div><p class="eyebrow">STOCKROOM</p><h2>Inventory<span>.</span></h2></div></div>
+      <div id="inventory-list" class="inventory-list"><p class="muted">Loading current stock…</p></div>
+    </section>
   </main>
   <footer><a class="brand" href="/">FIELD<span>&</span>FORM</a><p>Made for the everyday.</p><span>AWS edition · Thoughtful commerce</span></footer>
 </body>

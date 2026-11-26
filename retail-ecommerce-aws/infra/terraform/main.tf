@@ -32,6 +32,12 @@ resource "random_password" "database" {
   override_special = ""
 }
 
+resource "random_password" "admin_token" {
+  length           = 48
+  special          = false
+  override_special = ""
+}
+
 resource "aws_secretsmanager_secret" "database" {
   name                    = "${local.name}/database"
   description             = "Credentials for the retail PostgreSQL database."
@@ -41,9 +47,10 @@ resource "aws_secretsmanager_secret" "database" {
 resource "aws_secretsmanager_secret_version" "database" {
   secret_id = aws_secretsmanager_secret.database.id
   secret_string = jsonencode({
-    username = "retailadmin"
-    password = random_password.database.result
-    database = "retail"
+    username    = "retailadmin"
+    password    = random_password.database.result
+    database    = "retail"
+    admin_token = random_password.admin_token.result
   })
 }
 

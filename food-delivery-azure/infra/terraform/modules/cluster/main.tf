@@ -8,7 +8,7 @@ resource "azurerm_kubernetes_cluster" "this" {
 
   default_node_pool {
     name                = "system"
-    vm_size             = "Standard_D2s_v3"
+    vm_size             = "Standard_D2s_v5"
     node_count          = 2
     min_count           = 2
     max_count           = 4
@@ -25,7 +25,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   network_profile {
     network_plugin      = "azure"
     network_plugin_mode = "overlay"
-    network_policy      = "azure"
+    network_policy      = "cilium"
     load_balancer_sku   = "standard"
     outbound_type       = "loadBalancer"
     service_cidr        = "10.41.0.0/16"
@@ -53,5 +53,12 @@ resource "azurerm_role_assignment" "acr_pull" {
   scope                = var.registry_id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "pipeline_cluster_admin" {
+  scope                = azurerm_kubernetes_cluster.this.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = var.pipeline_principal_id
   principal_type       = "ServicePrincipal"
 }

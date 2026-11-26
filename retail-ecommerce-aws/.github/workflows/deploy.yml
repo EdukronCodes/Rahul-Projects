@@ -1,0 +1,130 @@
+name: Retail platform CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install -r requirements.txt
+          pytest -q
+        working-directory: retail-ecommerce-aws
+
+  deploy:
+    name: Provision AWS and deploy to EKS
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: retail-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_project_name: ${{ vars.TF_PROJECT_NAME || 'retail' }}
+      TF_VAR_environment: ${{ vars.TF_ENVIRONMENT || 'dev' }}
+      TF_VAR_deployment_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: azure/setup-helm@v4
+        with:
+          version: "3.14.4"
+      - name: Apply Terraform infrastructure
+        working-directory: retail-ecommerce-aws/infra/terraform
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=retail/${TF_VAR_environment}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+          terraform apply -input=false -auto-approve
+          echo "ECR_REPOSITORY=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_ENV"
+          echo "EKS_CLUSTER=$(terraform output -raw eks_cluster_name)" >> "$GITHUB_ENV"
+          echo "DB_SECRET_ARN=$(terraform output -raw database_secret_arn)" >> "$GITHUB_ENV"
+          echo "DB_ENDPOINT=$(terraform output -raw rds_endpoint)" >> "$GITHUB_ENV"
+      - name: Build and push container
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${ECR_REPOSITORY%%/*}"
+          docker build -t "$ECR_REPOSITORY:$GITHUB_SHA" retail-ecommerce-aws
+          docker push "$ECR_REPOSITORY:$GITHUB_SHA"
+      - name: Deploy to EKS
+        env:
+          SHOP_HOST: ${{ vars.SHOP_HOST }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+        run: |
+          set -euo pipefail
+          : "${SHOP_HOST:?Set repository variable SHOP_HOST to the public DNS hostname}"
+          : "${ACME_EMAIL:?Set repository variable ACME_EMAIL to the TLS certificate contact email}"
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
+          helm upgrade --install ingress-nginx ingress-nginx \
+            --repo https://kubernetes.github.io/ingress-nginx \
+            --namespace ingress-nginx --create-namespace --wait
+          ingress_hostname=""
+          for attempt in $(seq 1 30); do
+            ingress_hostname="$(kubectl -n ingress-nginx get service ingress-nginx-controller \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            test -n "$ingress_hostname" && break
+            sleep 10
+          done
+          echo "nginx ingress load balancer: ${ingress_hostname:-pending}"
+          test -n "$ingress_hostname" || { echo "Ingress load balancer hostname was not assigned."; exit 1; }
+          helm upgrade --install cert-manager cert-manager \
+            --repo https://charts.jetstack.io \
+            --namespace cert-manager --create-namespace \
+            --set crds.enabled=true --wait
+          kubectl apply -f retail-ecommerce-aws/k8s/certificate-issuer.yaml
+          kubectl patch clusterissuer retail-letsencrypt --type=merge \
+            -p="{\"spec\":{\"acme\":{\"email\":\"$ACME_EMAIL\"}}}"
+          kubectl create namespace retail --dry-run=client -o yaml | kubectl apply -f -
+
+          secret_json="$(aws secretsmanager get-secret-value \
+            --secret-id "$DB_SECRET_ARN" --query SecretString --output text)"
+          db_user="$(jq -r '.username' <<< "$secret_json")"
+          db_password="$(jq -r '.password' <<< "$secret_json")"
+          admin_token="$(jq -r '.admin_token' <<< "$secret_json")"
+          secret_file="$(mktemp)"
+          trap 'rm -f "$secret_file"' EXIT
+          umask 077
+          printf 'DB_HOST=%s\nDB_USER=%s\nDB_PASSWORD=%s\nADMIN_TOKEN=%s\n' \
+            "$DB_ENDPOINT" "$db_user" "$db_password" "$admin_token" > "$secret_file"
+          unset secret_json db_password admin_token
+          kubectl -n retail create secret generic retail-secrets \
+            --from-env-file="$secret_file" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -k retail-ecommerce-aws/k8s
+          kubectl -n retail set image deployment/retail app="$ECR_REPOSITORY:$GITHUB_SHA"
+          kubectl -n retail patch ingress retail --type=json \
+            -p="[{\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"$SHOP_HOST\"}]"
+          kubectl -n retail patch ingress retail --type=json \
+            -p="[{\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"$SHOP_HOST\"}]"
+          kubectl -n retail wait --for=condition=Ready certificate/retail-tls --timeout=10m
+          kubectl -n retail rollout status deployment/retail --timeout=5m
+          kubectl -n retail get ingress,service,pods,hpa

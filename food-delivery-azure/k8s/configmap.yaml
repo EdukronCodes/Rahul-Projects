@@ -4,3 +4,5 @@ metadata:
   name: food-delivery-config
 data:
   PORT: "8080"
+  DB_NAME: fooddelivery
+  DB_SSLMODE: require

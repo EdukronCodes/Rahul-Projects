@@ -3,9 +3,15 @@ kind: Ingress
 metadata:
   name: retail
   annotations:
+    cert-manager.io/cluster-issuer: retail-letsencrypt
     nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - shop.example.com
+      secretName: retail-tls
   rules:
     - host: shop.example.com
       http:
@@ -17,4 +23,3 @@ spec:
                 name: retail
                 port:
                   name: http
-  # Configure TLS after installing cert-manager and issuing a certificate.

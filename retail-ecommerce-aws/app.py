@@ -1,7 +1,8 @@
 import os
+import hmac
 from urllib.parse import quote_plus
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, current_app, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import select
 
@@ -104,6 +105,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=database_uri(),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", ""),
     )
     if test_config:
         app.config.update(test_config)
@@ -139,6 +141,8 @@ def create_app(test_config=None):
 
     @app.put("/api/inventory/<int:product_id>")
     def update_inventory(product_id):
+        if error := admin_auth_error():
+            return error
         product = db.session.get(Product, product_id)
         if product is None:
             return jsonify(error="Product not found."), 404
@@ -152,8 +156,25 @@ def create_app(test_config=None):
 
     @app.get("/api/orders")
     def get_orders():
+        if error := admin_auth_error():
+            return error
         orders = db.session.scalars(select(Order).order_by(Order.created_at.desc(), Order.id.desc())).all()
         return jsonify([order_json(order) for order in orders])
+
+    @app.post("/api/orders/lookup")
+    def lookup_order():
+        data = request.get_json(silent=True) or {}
+        order_id, email = data.get("order_id"), data.get("email", "").strip()
+        if type(order_id) is not int or not email or len(email) > 254:
+            return jsonify(error="Provide an order number and the email used at checkout."), 400
+        order = db.session.get(Order, order_id)
+        if order is None or not hmac.compare_digest(
+            order.email.casefold().encode("utf-8"),
+            email.casefold().encode("utf-8"),
+        ):
+            return jsonify(error="No order matched that number and email."), 404
+        details = order_json(order)
+        return jsonify({key: details[key] for key in ("id", "status", "total_cents", "created_at", "items")})
 
     @app.post("/api/orders")
     def place_order():
@@ -207,7 +228,9 @@ def create_app(test_config=None):
 
     @app.patch("/api/orders/<int:order_id>")
     def update_order(order_id):
-        order = db.session.get(Order, order_id)
+        if error := admin_auth_error():
+            return error
+        order = db.session.scalar(select(Order).where(Order.id == order_id).with_for_update())
         if order is None:
             return jsonify(error="Order not found."), 404
         data = request.get_json(silent=True) or {}
@@ -223,6 +246,16 @@ def create_app(test_config=None):
         return jsonify(order_json(order))
 
     return app
+
+
+def admin_auth_error():
+    expected = current_app.config["ADMIN_TOKEN"]
+    supplied = request.headers.get("X-Admin-Token", "")
+    if not expected:
+        return jsonify(error="Inventory desk access is not configured."), 503
+    if not hmac.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8")):
+        return jsonify(error="Inventory desk access denied."), 401
+    return None
 
 
 app = create_app()

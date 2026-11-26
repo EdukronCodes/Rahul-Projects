@@ -36,17 +36,22 @@
       <div><p class="eyebrow">READY WHEN YOU ARE</p><h2>Your bag<span>.</span></h2><div id="cart-lines" class="cart-lines"><p class="muted">Your bag is waiting for something tasty.</p></div></div>
       <form id="checkout-form" class="checkout-form">
         <label>Your name<input name="customer_name" maxlength="120" required placeholder="e.g. Alex Morgan"></label>
+        <label>Email for order updates<input name="email" type="email" maxlength="254" required placeholder="you@example.com"></label>
         <label>Delivery address<textarea name="delivery_address" maxlength="300" required placeholder="Street, neighborhood, city"></textarea></label>
         <button class="button button-dark" type="submit">Place order <span>→</span></button>
         <p id="checkout-message" class="form-message" role="status"></p>
       </form>
     </section>
     <section class="section orders-section" id="orders">
-      <div class="section-heading"><div><p class="eyebrow">THE LATEST</p><h2>Your orders<span>.</span></h2></div><button id="refresh-orders" class="text-button">Refresh ↻</button></div>
-      <div id="orders-list" class="orders-list"><p class="muted">No orders yet. That’s about to change.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">THE LATEST</p><h2>Track an order<span>.</span></h2></div><p>Order number + checkout email</p></div>
+      <form id="lookup-form" class="lookup-form"><label>Order number<input name="order_id" type="number" min="1" required></label><label>Checkout email<input name="email" type="email" required></label><button class="button button-dark" type="submit">Find order <span>→</span></button></form>
+      <div id="order-status" class="orders-list" role="status"></div>
     </section>
     <section class="manager-section" id="manage">
       <div class="section-heading"><div><p class="eyebrow">BEHIND THE COUNTER</p><h2>Restaurant desk<span>.</span></h2></div><p>Keep every order moving.</p></div>
+      <div class="admin-access"><label>Restaurant access token<input id="admin-token" type="password" autocomplete="current-password" placeholder="Enter your administrator token"></label><button id="admin-login" class="button button-dark" type="button">Unlock desk</button><button id="admin-logout" class="text-button" type="button">Lock</button></div>
+      <p id="admin-message" class="form-message" role="status">Order management requires an administrator token.</p>
+      <button id="refresh-orders" class="text-button" type="button">Refresh orders ↻</button>
       <div id="manager-list" class="orders-list"><p class="muted">No active orders right now.</p></div>
     </section>
   </main>

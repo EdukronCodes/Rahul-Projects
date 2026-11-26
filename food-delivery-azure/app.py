@@ -1,6 +1,8 @@
 import os
+import hmac
+from urllib.parse import quote_plus
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, current_app, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import select
 
@@ -22,6 +24,20 @@ STATUS_NEXT = {
     "delivered": set(),
     "cancelled": set(),
 }
+
+
+def database_uri():
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
+    host = os.getenv("DB_HOST")
+    if host:
+        user = quote_plus(os.environ["DB_USER"])
+        password = quote_plus(os.environ["DB_PASSWORD"])
+        database = quote_plus(os.getenv("DB_NAME", "fooddelivery"))
+        sslmode = os.getenv("DB_SSLMODE", "require")
+        return f"postgresql+psycopg://{user}:{password}@{host}:5432/{database}?sslmode={sslmode}"
+    return "sqlite:///food_delivery.db"
 
 
 class MenuItem(db.Model):
@@ -54,6 +70,7 @@ def order_json(order):
     return {
         "id": order.id,
         "customer_name": order.customer_name,
+        "email": order.email,
         "delivery_address": order.delivery_address,
         "status": order.status,
         "total_cents": order.total_cents,
@@ -73,8 +90,9 @@ def order_json(order):
 def create_app(test_config=None):
     app = Flask(__name__, static_folder="static")
     app.config.from_mapping(
-        SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", "sqlite:///food_delivery.db"),
+        SQLALCHEMY_DATABASE_URI=database_uri(),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        ADMIN_TOKEN=os.getenv("ADMIN_TOKEN", ""),
     )
     if test_config:
         app.config.update(test_config)
@@ -105,19 +123,37 @@ def create_app(test_config=None):
 
     @app.get("/api/orders")
     def get_orders():
+        if error := admin_auth_error():
+            return error
         orders = db.session.scalars(select(Order).order_by(Order.created_at.desc(), Order.id.desc())).all()
         return jsonify([order_json(order) for order in orders])
+
+    @app.post("/api/orders/lookup")
+    def lookup_order():
+        data = request.get_json(silent=True) or {}
+        order_id, email = data.get("order_id"), data.get("email", "").strip()
+        if type(order_id) is not int or not email or len(email) > 254:
+            return jsonify(error="Provide an order number and the email used at checkout."), 400
+        order = db.session.get(Order, order_id)
+        if order is None or not hmac.compare_digest(
+            order.email.casefold().encode("utf-8"),
+            email.casefold().encode("utf-8"),
+        ):
+            return jsonify(error="No order matched that number and email."), 404
+        details = order_json(order)
+        return jsonify({key: details[key] for key in ("id", "status", "total_cents", "created_at", "items")})
 
     @app.post("/api/orders")
     def place_order():
         data = request.get_json(silent=True) or {}
         name = data.get("customer_name", "").strip()
+        email = data.get("email", "").strip()
         address = data.get("delivery_address", "").strip()
         lines = data.get("items")
-        if not name or not address or not isinstance(lines, list) or not lines:
-            return jsonify(error="Provide a customer name, delivery address, and at least one item."), 400
-        if len(name) > 120 or len(address) > 300:
-            return jsonify(error="Name or delivery address is too long."), 400
+        if not name or "@" not in email or not address or not isinstance(lines, list) or not lines:
+            return jsonify(error="Provide a customer name, valid email, delivery address, and at least one item."), 400
+        if len(name) > 120 or len(email) > 254 or len(address) > 300:
+            return jsonify(error="Name, email, or delivery address is too long."), 400
 
         quantities = {}
         for line in lines:
@@ -136,7 +172,7 @@ def create_app(test_config=None):
         total = sum(item.price_cents * quantities[item.id] for item in menu_items)
         if total > 100_000:
             return jsonify(error="Order total exceeds the $1,000 limit."), 400
-        order = Order(customer_name=name, delivery_address=address, total_cents=total)
+        order = Order(customer_name=name, email=email, delivery_address=address, total_cents=total)
         order.items = [
             OrderItem(
                 menu_item_id=item.id,
@@ -152,6 +188,8 @@ def create_app(test_config=None):
 
     @app.patch("/api/orders/<int:order_id>")
     def update_order(order_id):
+        if error := admin_auth_error():
+            return error
         order = db.session.get(Order, order_id)
         if order is None:
             return jsonify(error="Order not found."), 404
@@ -164,6 +202,16 @@ def create_app(test_config=None):
         return jsonify(order_json(order))
 
     return app
+
+
+def admin_auth_error():
+    expected = current_app.config["ADMIN_TOKEN"]
+    supplied = request.headers.get("X-Admin-Token", "")
+    if not expected:
+        return jsonify(error="Restaurant desk access is not configured."), 503
+    if not hmac.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8")):
+        return jsonify(error="Restaurant desk access denied."), 401
+    return None
 
 
 app = create_app()

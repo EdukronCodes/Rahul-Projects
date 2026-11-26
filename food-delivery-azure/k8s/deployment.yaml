@@ -32,11 +32,26 @@ spec:
             - configMapRef:
                 name: food-delivery-config
           env:
-            - name: DATABASE_URL
+            - name: DB_HOST
               valueFrom:
                 secretKeyRef:
                   name: food-delivery-secrets
-                  key: DATABASE_URL
+                  key: DB_HOST
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: food-delivery-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: food-delivery-secrets
+                  key: DB_PASSWORD
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: food-delivery-secrets
+                  key: ADMIN_TOKEN
           readinessProbe:
             httpGet:
               path: /api/health

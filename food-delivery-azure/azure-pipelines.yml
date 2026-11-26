@@ -3,13 +3,19 @@ trigger:
     include:
       - main
 
+pr:
+  branches:
+    include:
+      - main
+
 variables:
-  imageRepository: food-delivery
-  dockerfilePath: $(Build.SourcesDirectory)/food-delivery-azure/Dockerfile
-  tag: $(Build.BuildId)
+  - group: food-delivery-secrets
+  - name: terraformVersion
+    value: "1.9.8"
 
 stages:
   - stage: Test
+    displayName: Test and build
     jobs:
       - job: PythonTests
         pool:
@@ -26,14 +32,17 @@ stages:
             displayName: Build container image
             inputs:
               command: build
-              repository: $(imageRepository)
-              dockerfile: $(dockerfilePath)
-              tags: $(tag)
+              repository: food-delivery
+              dockerfile: $(Build.SourcesDirectory)/food-delivery-azure/Dockerfile
+              buildContext: $(Build.SourcesDirectory)/food-delivery-azure
+              tags: $(Build.BuildId)
+
   - stage: Deploy
+    displayName: Provision Azure and deploy to AKS
     dependsOn: Test
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
-      - deployment: DeployAzureContainerApp
+      - deployment: DeployFoodDelivery
         environment: food-delivery-production
         pool:
           vmImage: ubuntu-latest
@@ -41,38 +50,84 @@ stages:
           runOnce:
             deploy:
               steps:
+                - task: TerraformInstaller@1
+                  inputs:
+                    terraformVersion: $(terraformVersion)
+                - task: HelmInstaller@1
+                  inputs:
+                    helmVersionToInstall: "3.14.4"
                 - task: AzureCLI@2
-                  displayName: Provision or update Azure infrastructure
+                  displayName: Apply Terraform, build image, and deploy to AKS
                   inputs:
                     azureSubscription: $(AZURE_SERVICE_CONNECTION)
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      az deployment group create \
-                        --resource-group "$(AZURE_RESOURCE_GROUP)" \
-                        --template-file "$(Build.SourcesDirectory)/food-delivery-azure/infra/main.bicep" \
-                        --parameters location="$(AZURE_LOCATION)" \
-                          appName="$(AZURE_APP_NAME)" \
-                          image="$(ACR_LOGIN_SERVER)/$(imageRepository):$(tag)" \
-                          registryServer="$(ACR_LOGIN_SERVER)" \
-                          registryUsername="$(ACR_USERNAME)" \
-                          registryPassword="$(ACR_PASSWORD)" \
-                          databasePassword="$(FOOD_DB_PASSWORD)"
-                - task: Docker@2
-                  displayName: Push image to Azure Container Registry
-                  inputs:
-                    command: push
-                    containerRegistry: $(ACR_SERVICE_CONNECTION)
-                    repository: $(imageRepository)
-                    tags: $(tag)
-                - task: AzureCLI@2
-                  displayName: Update Container App image
-                  inputs:
-                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      az containerapp update \
-                        --name "$(AZURE_APP_NAME)" \
-                        --resource-group "$(AZURE_RESOURCE_GROUP)" \
-                        --image "$(ACR_LOGIN_SERVER)/$(imageRepository):$(tag)"
+                      set -euo pipefail
+                      infra="$(Build.SourcesDirectory)/food-delivery-azure/infra/terraform"
+                      export TF_VAR_subscription_id="$(az account show --query id --output tsv)"
+                      export TF_VAR_resource_group_name="$(AZURE_RESOURCE_GROUP)"
+                      export TF_VAR_project_name="$(FOOD_PROJECT_NAME)"
+                      export TF_VAR_location="$(AZURE_LOCATION)"
+                      export TF_VAR_database_password="$(FOOD_DB_PASSWORD)"
+
+                      terraform -chdir="$infra" init -input=false \
+                        -backend-config="resource_group_name=$(TF_STATE_RESOURCE_GROUP)" \
+                        -backend-config="storage_account_name=$(TF_STATE_STORAGE_ACCOUNT)" \
+                        -backend-config="container_name=$(TF_STATE_CONTAINER)" \
+                        -backend-config="key=food-delivery/production.tfstate" \
+                        -backend-config="use_azuread_auth=true"
+                      terraform -chdir="$infra" apply -input=false -auto-approve
+
+                      acr_name="$(terraform -chdir="$infra" output -raw acr_name)"
+                      acr_server="$(terraform -chdir="$infra" output -raw acr_login_server)"
+                      aks_name="$(terraform -chdir="$infra" output -raw aks_name)"
+                      db_host="$(terraform -chdir="$infra" output -raw postgres_host)"
+                      db_user="$(terraform -chdir="$infra" output -raw postgres_username)"
+
+                      az acr build --registry "$acr_name" \
+                        --image "food-delivery:$(Build.BuildId)" \
+                        --file "$(Build.SourcesDirectory)/food-delivery-azure/Dockerfile" \
+                        "$(Build.SourcesDirectory)/food-delivery-azure"
+                      az aks get-credentials --resource-group "$(AZURE_RESOURCE_GROUP)" \
+                        --name "$aks_name" --overwrite-existing
+
+                      helm upgrade --install ingress-nginx ingress-nginx \
+                        --repo https://kubernetes.github.io/ingress-nginx \
+                        --namespace ingress-nginx --create-namespace --wait
+                      ingress_ip=""
+                      for attempt in $(seq 1 30); do
+                        ingress_ip="$(kubectl -n ingress-nginx get service ingress-nginx-controller \
+                          -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+                        test -n "$ingress_ip" && break
+                        sleep 10
+                      done
+                      echo "nginx ingress public IP: ${ingress_ip:-pending}"
+                      test -n "$ingress_ip" || { echo "Ingress IP was not assigned."; exit 1; }
+                      helm upgrade --install cert-manager cert-manager \
+                        --repo https://charts.jetstack.io \
+                        --namespace cert-manager --create-namespace \
+                        --set crds.enabled=true --wait
+                      kubectl apply -f "$(Build.SourcesDirectory)/food-delivery-azure/k8s/certificate-issuer.yaml"
+                      kubectl patch clusterissuer food-delivery-letsencrypt --type=merge \
+                        -p='{"spec":{"acme":{"email":"$(ACME_EMAIL)"}}}'
+                      kubectl create namespace food-delivery --dry-run=client -o yaml | kubectl apply -f -
+                      secret_file="$(mktemp)"
+                      trap 'rm -f "$secret_file"' EXIT
+                      umask 077
+                      printf 'DB_HOST=%s\nDB_USER=%s\nDB_PASSWORD=%s\nADMIN_TOKEN=%s\n' \
+                        "$db_host" "$db_user" "$(FOOD_DB_PASSWORD)" "$(FOOD_ADMIN_TOKEN)" > "$secret_file"
+                      kubectl -n food-delivery create secret generic food-delivery-secrets \
+                        --from-env-file="$secret_file" --dry-run=client -o yaml | kubectl apply -f -
+
+                      kubectl apply -k "$(Build.SourcesDirectory)/food-delivery-azure/k8s"
+                      kubectl -n food-delivery set image deployment/food-delivery \
+                        "app=$acr_server/food-delivery:$(Build.BuildId)"
+                      kubectl -n food-delivery patch ingress food-delivery --type=json \
+                        -p='[{"op":"replace","path":"/spec/rules/0/host","value":"$(FOOD_APP_HOST)"}]'
+                      kubectl -n food-delivery patch ingress food-delivery --type=json \
+                        -p='[{"op":"replace","path":"/spec/tls/0/hosts/0","value":"$(FOOD_APP_HOST)"}]'
+                      kubectl -n food-delivery wait --for=condition=Ready \
+                        certificate/food-delivery-tls --timeout=10m
+                      kubectl -n food-delivery rollout status deployment/food-delivery --timeout=5m
+                      kubectl -n food-delivery get ingress,service,pods,hpa

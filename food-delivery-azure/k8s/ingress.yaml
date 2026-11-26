@@ -3,9 +3,15 @@ kind: Ingress
 metadata:
   name: food-delivery
   annotations:
+    cert-manager.io/cluster-issuer: food-delivery-letsencrypt
     nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - food.example.com
+      secretName: food-delivery-tls
   rules:
     - host: food.example.com
       http:
@@ -17,4 +23,3 @@ spec:
                 name: food-delivery
                 port:
                   name: http
-  # Configure TLS after installing cert-manager and issuing a certificate.

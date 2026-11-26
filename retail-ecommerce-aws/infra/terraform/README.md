@@ -15,7 +15,12 @@ aws configure
 cd retail-ecommerce-aws/infra/terraform
 cp terraform.tfvars.example terraform.tfvars
 # Set the account's existing GitHub Actions deployment role ARN.
-terraform init
+terraform init \
+  -backend-config="bucket=YOUR_STATE_BUCKET" \
+  -backend-config="key=retail/dev/terraform.tfstate" \
+  -backend-config="region=us-east-1" \
+  -backend-config="dynamodb_table=YOUR_LOCK_TABLE" \
+  -backend-config="encrypt=true"
 terraform fmt -recursive
 terraform validate
 terraform plan -out=infra.tfplan
@@ -29,5 +34,9 @@ To connect:
 ```bash
 aws eks update-kubeconfig --region "$(terraform output -raw aws_region)" --name "$(terraform output -raw eks_cluster_name)"
 ```
+
+For the GitHub Actions workflow, configure repository secret `AWS_DEPLOY_ROLE_ARN` and variables `AWS_REGION`, `TF_PROJECT_NAME`, `TF_ENVIRONMENT`, `TF_STATE_BUCKET`, `TF_STATE_LOCK_TABLE`, `SHOP_HOST`, and `ACME_EMAIL`. The role trust policy must allow GitHub's OIDC provider only for this repository's `main` branch. The role also needs permission to manage the Terraform resources, publish to ECR, read the Secrets Manager secret, and use the EKS access entry Terraform creates.
+
+The first successful cluster/ingress provisioning may not yet have public DNS. The workflow prints the ingress load-balancer hostname and then waits for the certificate; if DNS isn't routed yet, create the CNAME for `SHOP_HOST` and rerun the workflow.
 
 For production, review EKS endpoint CIDRs, use a private-only API endpoint or restrict public CIDRs, add WAF/TLS, use multi-AZ RDS and a multi-AZ NAT design, configure deletion protection and backup retention, and use external-secrets/IRSA instead of copying database credentials into Kubernetes.

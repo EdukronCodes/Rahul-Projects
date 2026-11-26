@@ -8,6 +8,7 @@ def client():
     app = create_app({
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "ADMIN_TOKEN": "test-admin",
     })
     with app.test_client() as client:
         yield client
@@ -42,7 +43,7 @@ def test_order_decrements_stock_and_cancellation_restores_it(client):
 
 def test_out_of_stock_order_does_not_change_inventory(client):
     product = client.get("/api/products").json[0]
-    client.put(f"/api/inventory/{product['id']}", json={"stock": 0})
+    client.put(f"/api/inventory/{product['id']}", json={"stock": 0}, headers={"X-Admin-Token": "test-admin"})
     response = client.post("/api/orders", json={
         "customer_name": "Ari",
         "email": "ari@example.com",
@@ -51,6 +52,24 @@ def test_out_of_stock_order_does_not_change_inventory(client):
     })
     assert response.status_code == 409
     assert client.get("/api/inventory").json[0]["stock"] == 0
+
+
+def test_order_lookup_and_management_require_correct_identity(client):
+    product = client.get("/api/products").json[0]
+    response = client.post("/api/orders", json={
+        "customer_name": "Ari",
+        "email": "ari@example.com",
+        "shipping_address": "10 Market Street",
+        "items": [{"product_id": product["id"], "quantity": 1}],
+    })
+    order = response.json
+    assert client.get("/api/orders").status_code == 401
+    assert client.get("/api/orders", headers={"X-Admin-Token": "test-admin"}).status_code == 200
+    lookup = client.post("/api/orders/lookup", json={"order_id": order["id"], "email": "ari@example.com"})
+    assert lookup.status_code == 200
+    assert "email" not in lookup.json
+    assert client.post("/api/orders/lookup", json={"order_id": order["id"], "email": "wrong@example.com"}).status_code == 404
+    assert client.put(f"/api/inventory/{product['id']}", json={"stock": 5}).status_code == 401
 
 
 @pytest.mark.parametrize("payload", [

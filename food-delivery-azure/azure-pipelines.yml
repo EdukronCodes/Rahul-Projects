@@ -96,7 +96,7 @@ stages:
                         --repo https://kubernetes.github.io/ingress-nginx \
                         --namespace ingress-nginx --create-namespace --wait
                       ingress_ip=""
-                      for attempt in $(seq 1 30); do
+                      for attempt in {1..30}; do
                         ingress_ip="$(kubectl -n ingress-nginx get service ingress-nginx-controller \
                           -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
                         test -n "$ingress_ip" && break

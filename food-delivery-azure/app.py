@@ -50,6 +50,7 @@ class MenuItem(db.Model):
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     customer_name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(254), nullable=False)
     delivery_address = db.Column(db.String(300), nullable=False)
     status = db.Column(db.String(30), nullable=False, default="placed")
     total_cents = db.Column(db.Integer, nullable=False)

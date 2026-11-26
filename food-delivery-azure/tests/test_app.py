@@ -51,3 +51,8 @@ def test_order_total_is_server_calculated_and_statuses_follow_workflow(client):
 ])
 def test_invalid_orders_are_rejected(client, payload):
     assert client.post("/api/orders", json=payload).status_code == 400
+
+
+def test_non_object_json_is_rejected(client):
+    assert client.post("/api/orders", json=[]).status_code == 400
+    assert client.post("/api/orders/lookup", json=[]).status_code == 400

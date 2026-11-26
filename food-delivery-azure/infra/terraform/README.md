@@ -4,7 +4,7 @@ Terraform provisions a dedicated VNet, delegated private PostgreSQL subnet and D
 
 ## Prerequisites
 
-- Terraform 1.6+, Azure CLI, `kubectl`, an Azure subscription, and an existing resource group.
+- Terraform 1.6+, Azure CLI, `kubectl`, an Azure subscription, and an existing resource group. In Azure DevOps, install the Terraform Installer extension that provides `TerraformInstaller@1`; `HelmInstaller@1` is used for Helm.
 - An Azure identity authorized to create networking, AKS, PostgreSQL, ACR, and role assignments in the subscription/resource group.
 - The identity's service-principal object ID (for the role assignments granted to the CI principal).
 - Create an Azure Storage Account and private blob container for Terraform remote state. The Azure DevOps service connection needs blob data access (for example, Storage Blob Data Contributor) on that container.

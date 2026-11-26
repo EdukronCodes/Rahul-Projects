@@ -37,7 +37,11 @@ def test_order_decrements_stock_and_cancellation_restores_it(client):
     order = response.json
     assert order["total_cents"] == product["price_cents"] * 2
     assert client.get("/api/inventory").json[0]["stock"] == original_stock - 2
-    assert client.patch(f"/api/orders/{order['id']}", json={"status": "cancelled"}).status_code == 200
+    assert client.patch(
+        f"/api/orders/{order['id']}",
+        json={"status": "cancelled"},
+        headers={"X-Admin-Token": "test-admin"},
+    ).status_code == 200
     assert client.get("/api/inventory").json[0]["stock"] == original_stock
 
 
@@ -79,3 +83,9 @@ def test_order_lookup_and_management_require_correct_identity(client):
 ])
 def test_invalid_orders_are_rejected(client, payload):
     assert client.post("/api/orders", json=payload).status_code == 400
+
+
+def test_non_object_json_is_rejected(client):
+    assert client.post("/api/orders", json=[]).status_code == 400
+    assert client.post("/api/orders/lookup", json=[]).status_code == 400
+    assert client.put("/api/inventory/1", json=[], headers={"X-Admin-Token": "test-admin"}).status_code == 400

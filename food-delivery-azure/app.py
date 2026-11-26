@@ -197,7 +197,7 @@ def create_app(test_config=None):
     def update_order(order_id):
         if error := admin_auth_error():
             return error
-        order = db.session.get(Order, order_id)
+        order = db.session.scalar(select(Order).where(Order.id == order_id).with_for_update())
         if order is None:
             return jsonify(error="Order not found."), 404
         data = request.get_json(silent=True)

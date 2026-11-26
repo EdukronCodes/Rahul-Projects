@@ -146,7 +146,9 @@ def create_app(test_config=None):
         product = db.session.get(Product, product_id)
         if product is None:
             return jsonify(error="Product not found."), 404
-        data = request.get_json(silent=True) or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Stock must be a whole number between 0 and 1,000,000."), 400
         stock = data.get("stock")
         if type(stock) is not int or stock < 0 or stock > 1_000_000:
             return jsonify(error="Stock must be a whole number between 0 and 1,000,000."), 400
@@ -163,9 +165,13 @@ def create_app(test_config=None):
 
     @app.post("/api/orders/lookup")
     def lookup_order():
-        data = request.get_json(silent=True) or {}
-        order_id, email = data.get("order_id"), data.get("email", "").strip()
-        if type(order_id) is not int or not email or len(email) > 254:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Provide an order number and the email used at checkout."), 400
+        order_id, email = data.get("order_id"), data.get("email")
+        if isinstance(email, str):
+            email = email.strip()
+        if type(order_id) is not int or not isinstance(email, str) or not email or len(email) > 254:
             return jsonify(error="Provide an order number and the email used at checkout."), 400
         order = db.session.get(Order, order_id)
         if order is None or not hmac.compare_digest(
@@ -178,10 +184,13 @@ def create_app(test_config=None):
 
     @app.post("/api/orders")
     def place_order():
-        data = request.get_json(silent=True) or {}
-        name = data.get("customer_name", "").strip()
-        email = data.get("email", "").strip()
-        address = data.get("shipping_address", "").strip()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Provide a valid name, email, shipping address, and at least one product."), 400
+        name, email, address = data.get("customer_name"), data.get("email"), data.get("shipping_address")
+        if not all(isinstance(value, str) for value in (name, email, address)):
+            return jsonify(error="Provide a valid name, email, and shipping address."), 400
+        name, email, address = name.strip(), email.strip(), address.strip()
         lines = data.get("items")
         if not name or len(name) > 120 or "@" not in email or len(email) > 254 or not address or len(address) > 300:
             return jsonify(error="Provide a valid name, email, and shipping address."), 400
@@ -233,14 +242,20 @@ def create_app(test_config=None):
         order = db.session.scalar(select(Order).where(Order.id == order_id).with_for_update())
         if order is None:
             return jsonify(error="Order not found."), 404
-        data = request.get_json(silent=True) or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="Provide a valid order status."), 400
         next_status = data.get("status")
         if next_status not in ORDER_STATUSES or next_status not in STATUS_NEXT[order.status]:
             return jsonify(error=f"Invalid status transition from {order.status}.", allowed_statuses=sorted(STATUS_NEXT[order.status])), 400
         if next_status == "cancelled":
+            product_ids = [line.product_id for line in order.items]
+            products = db.session.scalars(
+                select(Product).where(Product.id.in_(product_ids)).order_by(Product.id).with_for_update()
+            ).all()
+            product_by_id = {product.id: product for product in products}
             for line in order.items:
-                product = db.session.get(Product, line.product_id)
-                product.stock += line.quantity
+                product_by_id[line.product_id].stock += line.quantity
         order.status = next_status
         db.session.commit()
         return jsonify(order_json(order))

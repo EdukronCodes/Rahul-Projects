@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2ea">
+  <title>DashDish | Food delivery</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">dash<span>dish</span><i>.</i></a>
+    <nav><a href="#menu">Menu</a><a href="#orders">My orders</a><a href="#manage">Restaurant</a></nav>
+    <a class="cart-link" href="#checkout">Your bag <b id="cart-count">0</b></a>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">GOOD FOOD, RIGHT ON TIME</p>
+        <h1>Make room<br>for <em>something</em><br>delicious.</h1>
+        <p>Freshly made favorites, delivered to your door. Pick your plate and we’ll take it from here.</p>
+        <a class="button button-dark" href="#menu">Explore the menu <span>↓</span></a>
+      </div>
+      <div class="hero-art" aria-label="Illustration of a bowl of fresh food">
+        <div class="sun"></div><div class="art-caption">a little joy<br>in every bite</div>
+        <div class="food-bowl"><div class="food-greens"></div><div class="food-tomato"></div><div class="food-cheese"></div><div class="food-olive"></div></div>
+        <div class="art-sticker">made<br>with care</div>
+      </div>
+    </section>
+    <section class="section menu-section" id="menu">
+      <div class="section-heading"><div><p class="eyebrow">THE GOOD STUFF</p><h2>Today’s menu<span>.</span></h2></div><p>All the comfort. None of the cooking.</p></div>
+      <div id="menu-grid" class="menu-grid"><p class="muted">Loading today’s menu…</p></div>
+    </section>
+    <section class="checkout-band" id="checkout">
+      <div><p class="eyebrow">READY WHEN YOU ARE</p><h2>Your bag<span>.</span></h2><div id="cart-lines" class="cart-lines"><p class="muted">Your bag is waiting for something tasty.</p></div></div>
+      <form id="checkout-form" class="checkout-form">
+        <label>Your name<input name="customer_name" maxlength="120" required placeholder="e.g. Alex Morgan"></label>
+        <label>Delivery address<textarea name="delivery_address" maxlength="300" required placeholder="Street, neighborhood, city"></textarea></label>
+        <button class="button button-dark" type="submit">Place order <span>→</span></button>
+        <p id="checkout-message" class="form-message" role="status"></p>
+      </form>
+    </section>
+    <section class="section orders-section" id="orders">
+      <div class="section-heading"><div><p class="eyebrow">THE LATEST</p><h2>Your orders<span>.</span></h2></div><button id="refresh-orders" class="text-button">Refresh ↻</button></div>
+      <div id="orders-list" class="orders-list"><p class="muted">No orders yet. That’s about to change.</p></div>
+    </section>
+    <section class="manager-section" id="manage">
+      <div class="section-heading"><div><p class="eyebrow">BEHIND THE COUNTER</p><h2>Restaurant desk<span>.</span></h2></div><p>Keep every order moving.</p></div>
+      <div id="manager-list" class="orders-list"><p class="muted">No active orders right now.</p></div>
+    </section>
+  </main>
+  <footer><a class="brand" href="/">dash<span>dish</span><i>.</i></a><p>Good food brings us together.</p><span>Azure edition · Built for hungry humans</span></footer>
+</body>
+</html>

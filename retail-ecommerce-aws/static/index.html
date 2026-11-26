@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f6f1">
+  <title>Field & Form | Thoughtful goods</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="announcement">A little more thoughtful. A little less ordinary. <a href="#shop">Shop the edit →</a></div>
+  <header class="topbar">
+    <a class="brand" href="/">FIELD<span>&</span>FORM</a>
+    <nav><a href="#shop">Shop all</a><a href="#story">Our approach</a><a href="#orders">Order lookup</a><a href="#admin">Inventory</a></nav>
+    <a class="bag" href="#bag">Bag <b id="bag-count">0</b></a>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-content"><p class="eyebrow">THE EVERYDAY, ELEVATED</p><h1>Good things<br>find their <i>way</i><br>into your day.</h1><p>Useful, well-made objects for the small rituals that make a life.</p><a class="button button-dark" href="#shop">Find your everyday <span>↘</span></a><div class="hero-note">Considered pieces.<br>Made to be kept.</div></div>
+      <div class="hero-image"><div class="poster-top">A COLLECTION<br>FOR EVERY DAY</div><div class="poster-sun"></div><div class="poster-object mug"><div></div></div><div class="poster-object book"></div><div class="poster-object tote"></div><div class="poster-bottom">NO. 04 — SLOW LIVING</div><span class="hero-caption">Objects with intention.</span></div>
+    </section>
+    <section class="shop-section" id="shop">
+      <div class="section-title"><div><p class="eyebrow">A FEW GOOD THINGS</p><h2>The considered edit<span>.</span></h2></div><div class="filters" id="filters"></div></div>
+      <div id="product-grid" class="product-grid"><p class="muted">Opening the shop…</p></div>
+    </section>
+    <section class="story-section" id="story"><div class="story-mark">F<span>&</span>F</div><div><p class="eyebrow">LESS, BUT BETTER</p><h2>Everyday objects.<br><i>Extraordinary</i> care.</h2><p>We look for pieces that do their job beautifully, feel good to use, and earn their place at home. No clutter, just considered essentials.</p><a href="#shop" class="story-link">Shop with intention <span>→</span></a></div></section>
+    <section class="bag-section" id="bag">
+      <div><p class="eyebrow">YOUR NEW FAVORITES</p><h2>Your bag<span>.</span></h2><div id="bag-lines" class="bag-lines"><p class="muted">Nothing in your bag just yet.</p></div></div>
+      <form id="checkout-form" class="checkout-form"><h3>Shipping details</h3><label>Full name<input name="customer_name" maxlength="120" required placeholder="Your name"></label><label>Email address<input name="email" type="email" maxlength="254" required placeholder="you@example.com"></label><label>Shipping address<textarea name="shipping_address" maxlength="300" required placeholder="Street, city, postal code"></textarea></label><button class="button button-dark" type="submit">Place your order <span>→</span></button><p id="checkout-message" class="form-message" role="status"></p></form>
+    </section>
+    <section class="orders-section" id="orders"><div class="section-title"><div><p class="eyebrow">WHERE IT’S GOING</p><h2>Recent orders<span>.</span></h2></div><button id="refresh-orders" class="text-button">Refresh ↻</button></div><div id="orders-list" class="orders-list"><p class="muted">Your order list will appear here.</p></div></section>
+    <section class="inventory-section" id="admin"><div class="section-title"><div><p class="eyebrow">STOCKROOM</p><h2>Inventory desk<span>.</span></h2></div><p>Keep the shelves in good shape.</p></div><div id="inventory-list" class="inventory-list"><p class="muted">Loading current stock…</p></div></section>
+  </main>
+  <footer><a class="brand" href="/">FIELD<span>&</span>FORM</a><p>Made for the everyday.</p><span>AWS edition · Thoughtful commerce</span></footer>
+</body>
+</html>
